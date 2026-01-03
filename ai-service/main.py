@@ -1,7 +1,18 @@
-
 import torch
 import warnings
+import os
+import shutil
+import uvicorn
+import traceback
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from TTS.api import TTS
+from spleeter.separator import Separator
 
+# --- 1. TORCH HACK (Keep this for XTTS compatibility) ---
 # Force torch.load to allow loading the older XTTS model files safely
 _original_load = torch.load
 def safe_load(*args, **kwargs):
@@ -11,65 +22,65 @@ def safe_load(*args, **kwargs):
 torch.load = safe_load
 # -----------------------------------------------------------
 
-from fastapi import FastAPI, UploadFile, File, Form
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from TTS.api import TTS
-from spleeter.separator import Separator
-import uvicorn
-import os
-import shutil
-
-# --- GLOBAL VARIABLES (Initially None) ---
+# --- GLOBAL VARIABLES ---
 tts = None
 separator = None
 
-# --- LIFESPAN MANAGER (Prevents Windows Freeze) ---
-# This runs ONLY when the server starts, not in background processes
+# --- LIFESPAN MANAGER ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global tts, separator
     
-    # 1. LOAD XTTS-v2 (Voice Cloning)
+    # 1. LOAD XTTS-v2
     print("⏳ Loading 'XTTS-v2' Model...")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"🚀 AI running on: {device.upper()}")
     
-    # Load the model strictly inside this function
-    tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2", gpu=(device == "cuda"))
-    print("✅ XTTS Model Loaded.")
+    try:
+        # Load model with specific config to avoid re-downloading if possible
+        tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+        print("✅ XTTS Model Loaded.")
+    except Exception as e:
+        print(f"❌ Failed to load XTTS: {e}")
 
-    # 2. LOAD SPLEETER (Vocal Remover)
+    # 2. LOAD SPLEETER
     print("⏳ Loading Spleeter (2-stems)...")
-    separator = Separator('spleeter:2stems')
-    print("✅ Spleeter Loaded.")
+    try:
+        separator = Separator('spleeter:2stems')
+        print("✅ Spleeter Loaded.")
+    except Exception as e:
+        print(f"❌ Failed to load Spleeter: {e}")
     
     yield
-    
-    # Clean up when server stops
     print("🛑 Shutting down models...")
 
-# Initialize FastAPI with the lifespan
+# Initialize App
 app = FastAPI(lifespan=lifespan)
 
-# Enable CORS
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], # Allow all for now (Backend proxies requests)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Create folders
+# Create Directories
 os.makedirs("temp_uploads", exist_ok=True)
 os.makedirs("generated_audio", exist_ok=True)
 os.makedirs("generated_audio/stems", exist_ok=True)
 
-# Mount generated_audio so files can be accessed by frontend
+# Mount Static Files (So the internet can download the generated audio)
 app.mount("/generated_audio", StaticFiles(directory="generated_audio"), name="generated_audio")
+
+# --- HELPER: GET PUBLIC URL ---
+def get_base_url():
+    # Hugging Face Spaces provides 'SPACE_HOST' env var automatically
+    space_host = os.getenv("SPACE_HOST")
+    if space_host:
+        return f"https://{space_host}"
+    return "http://localhost:7860" # Fallback for local testing
 
 @app.get("/")
 def home():
@@ -79,14 +90,11 @@ def home():
 @app.post("/clone-voice")
 async def clone_voice(text: str = Form(...), audio_file: UploadFile = File(...)):
     global tts
-    # 1. Check if model is loaded
     if tts is None:
-        print("❌ Error: Model was None!")
-        return {"error": "Model is still loading, please wait."}
+        return {"error": "TTS Model is not loaded."}
 
     try:
-        # 2. Verify Upload
-        print(f"📥 Received file: {audio_file.filename}")
+        # 1. Save Reference Audio
         temp_filename = f"temp_uploads/{audio_file.filename}"
         with open(temp_filename, "wb") as buffer:
             shutil.copyfileobj(audio_file.file, buffer)
@@ -94,10 +102,9 @@ async def clone_voice(text: str = Form(...), audio_file: UploadFile = File(...))
         absolute_path = os.path.abspath(temp_filename)
         output_filename = f"generated_audio/output_{audio_file.filename}.wav"
         
-        print(f"🎤 Processing Text: {text[:30]}...")
-        print(f"📍 Reference Audio: {absolute_path}")
+        print(f"🎤 Processing: {text[:20]}...")
 
-        # 3. Generate
+        # 2. Generate Audio
         tts.tts_to_file(
             text=text,
             file_path=output_filename,
@@ -106,51 +113,57 @@ async def clone_voice(text: str = Form(...), audio_file: UploadFile = File(...))
             split_sentences=True
         )
         
-        # 4. Verify Output
+        # 3. Return File
         if os.path.exists(output_filename) and os.path.getsize(output_filename) > 0:
-            print(f"✅ Success! File created at: {output_filename}")
             return FileResponse(output_filename, media_type="audio/wav", filename="cloned_voice.wav")
         else:
-            print("❌ Error: File was not created by TTS engine.")
-            return {"error": "TTS failed to create audio file"}
+            return {"error": "TTS generation failed (File empty)."}
 
     except Exception as e:
-        # 5. CATCH AND PRINT EVERYTHING
-        print(f"\n\n❌ CRITICAL ERROR IN TERMINAL: {str(e)}\n\n")
-        import traceback
+        print(f"❌ XTTS Error: {str(e)}")
         traceback.print_exc()
         return {"error": str(e)}
-    
+
 # --- ROUTE 2: VOCAL SEPARATOR ---
 @app.post("/separate-vocals")
 async def separate_vocals(audio_file: UploadFile = File(...)):
     global separator
     if separator is None:
-        return {"error": "Model is still loading, please wait."}
+        return {"error": "Spleeter Model is not loaded."}
 
     try:
-        # Save input
+        # 1. Save Input
         input_path = f"temp_uploads/{audio_file.filename}"
         with open(input_path, "wb") as buffer:
             shutil.copyfileobj(audio_file.file, buffer)
             
-        # Spleeter creates a folder named after the file
         filename_no_ext = os.path.splitext(audio_file.filename)[0]
         output_dir = "generated_audio/stems"
         
-        # Run Separation
+        # 2. Run Separation
+        # Note: Spleeter creates a subdirectory named after the file
         separator.separate_to_file(input_path, output_dir)
         
-        # Return URLs
+        # 3. Construct Public URLs
+        base_url = get_base_url()
+        
+        # Check if files exist before returning URL
+        vocals_path = f"{output_dir}/{filename_no_ext}/vocals.wav"
+        music_path = f"{output_dir}/{filename_no_ext}/accompaniment.wav"
+        
         return {
             "status": "success", 
-            "vocals": f"http://localhost:8000/generated_audio/stems/{filename_no_ext}/vocals.wav",
-            "music": f"http://localhost:8000/generated_audio/stems/{filename_no_ext}/accompaniment.wav"
+            # 🟢 CHANGED: Uses dynamic Base URL
+            "vocals": f"{base_url}/generated_audio/stems/{filename_no_ext}/vocals.wav",
+            "music": f"{base_url}/generated_audio/stems/{filename_no_ext}/accompaniment.wav"
         }
 
     except Exception as e:
         print(f"❌ Separation Error: {e}")
+        traceback.print_exc()
         return {"error": str(e)}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # 🟢 CHANGED: Default port 7860 (Standard for Hugging Face)
+    port = int(os.environ.get("PORT", 7860))
+    uvicorn.run(app, host="0.0.0.0", port=port)

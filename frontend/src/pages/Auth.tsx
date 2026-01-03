@@ -2,11 +2,11 @@ import { useState } from "react";
 import axios from "axios";
 import { User, Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
 import { GoogleLogin } from '@react-oauth/google';
-import { useNavigate } from "react-router-dom"; // <--- Added for redirection
+import { useNavigate } from "react-router-dom";
 
 interface AuthProps {
   onLogin: (user: any) => void;
-  redirectPath?: string; // <--- Optional prop to know where to go next
+  redirectPath?: string;
 }
 
 export default function Auth({ onLogin, redirectPath = "/dashboard" }: AuthProps) {
@@ -16,12 +16,15 @@ export default function Auth({ onLogin, redirectPath = "/dashboard" }: AuthProps
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // 🟢 NEW: Get Backend URL from Environment
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
   // Helper to finish login and redirect
   const handleSuccess = (user: any, token: string) => {
     localStorage.setItem("user", JSON.stringify(user)); // Save user
     localStorage.setItem("token", token); // Save token
     onLogin(user); // Update App state
-    navigate(redirectPath); // <--- REDIRECT TO CORRECT PAGE (Dashboard or Studio)
+    navigate(redirectPath); 
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -30,8 +33,9 @@ export default function Auth({ onLogin, redirectPath = "/dashboard" }: AuthProps
 
     const endpoint = isLogin ? "/api/login" : "/api/register";
     try {
-      // Using 127.0.0.1 to avoid localhost resolution delays
-      const res = await axios.post(`http://127.0.0.1:5000${endpoint}`, formData);
+      // 🟢 CHANGED: Use dynamic API_URL instead of 127.0.0.1
+      const res = await axios.post(`${API_URL}${endpoint}`, formData);
+      
       if (res.data.success) {
         if (isLogin) {
           handleSuccess(res.data.user, res.data.token);
@@ -51,7 +55,8 @@ export default function Auth({ onLogin, redirectPath = "/dashboard" }: AuthProps
   const handleGoogleSuccess = async (credentialResponse: any) => {
     try {
       setLoading(true);
-      const res = await axios.post("http://127.0.0.1:5000/api/google-login", {
+      // 🟢 CHANGED: Use dynamic API_URL
+      const res = await axios.post(`${API_URL}/api/google-login`, {
         token: credentialResponse.credential,
       });
 

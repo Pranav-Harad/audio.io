@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import axios from "axios";
-import { Upload, Music, Mic, Scissors, FastForward, Play, Download, Loader2, RefreshCw, Wand2 } from "lucide-react";
+import { Upload, Music, Mic, Scissors, FastForward, Loader2, RefreshCw, Wand2, Download } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import AudioWaveform from "../components/AudioWaveform";
 
@@ -21,6 +21,9 @@ export default function AudioStudio() {
   const [stems, setStems] = useState<{vocals: string, music: string} | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 🟢 NEW: Get Backend URL from Environment
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
   // 1. Handle File Upload & Get Duration
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -50,10 +53,6 @@ export default function AudioStudio() {
 
     const formData = new FormData();
     formData.append("audio", file);
-    
-    // Map 'vocal' tool to the specific endpoint logic if needed, 
-    // but for now we send "operation" and handle it on server.
-    // NOTE: Server expects "vocal" for separation, "speed"/"pitch"/"trim" for ffmpeg.
     formData.append("operation", tool === "vocal" ? "vocal" : tool);
 
     // Prepare Value
@@ -65,11 +64,10 @@ export default function AudioStudio() {
     }
     formData.append("value", finalValue);
 
-    // Determine Endpoint
-    // Vocal remover usually has a separate route in your backend, 
-    // otherwise use the generic /api/process if you combined them.
-    // Based on previous code, vocal remover was /api/remove-vocals
-    const endpoint = tool === "vocal" ? "http://localhost:5000/api/remove-vocals" : "http://localhost:5000/api/process-audio";
+    // 🟢 CHANGED: Use API_URL for dynamic endpoint selection
+    const endpoint = tool === "vocal" 
+      ? `${API_URL}/api/remove-vocals` 
+      : `${API_URL}/api/process-audio`;
 
     try {
       const res = await axios.post(endpoint, formData, {
@@ -77,17 +75,11 @@ export default function AudioStudio() {
       });
 
       if (tool === "vocal") {
-        // Fix URLs to point to backend
-        setStems({
-            vocals: res.data.vocals.replace("http://localhost:8000", "http://localhost:5000/proxy"), // Adjust based on your proxy setup
-            music: res.data.music
-        });
-        // Note: If your backend returns direct Python URLs (port 8000), you might need to fix them 
-        // or ensure your Node server proxies them correctly. 
-        // For now, assuming standard returns:
+        // 🟢 CHANGED: The AI service (Hugging Face) now returns full public URLs, so we just use them directly.
         setStems(res.data);
       } else {
-        setProcessedUrl(`http://localhost:5000${res.data.downloadUrl}?t=${Date.now()}`);
+        // 🟢 CHANGED: Construct full URL for Backend (Render) hosted files
+        setProcessedUrl(`${API_URL}${res.data.downloadUrl}?t=${Date.now()}`);
       }
 
     } catch (err: any) {
@@ -170,8 +162,8 @@ export default function AudioStudio() {
                         : "bg-black/20 border-white/5 hover:bg-white/5 hover:border-white/20"
                       }`}
                     >
-                       <t.icon className={t.color} size={24} />
-                       <span className={`font-bold text-sm ${tool === t.id ? "text-white" : "text-gray-400"}`}>{t.label}</span>
+                        <t.icon className={t.color} size={24} />
+                        <span className={`font-bold text-sm ${tool === t.id ? "text-white" : "text-gray-400"}`}>{t.label}</span>
                     </button>
                  ))}
               </div>
@@ -193,7 +185,7 @@ export default function AudioStudio() {
                         <strong className="text-white ml-1">Vocals</strong> and <strong className="text-white">Instrumental</strong>.
                       </p>
                       <div className="inline-block bg-purple-500/20 px-4 py-2 rounded-lg text-purple-300 text-sm font-mono">
-                         Estimated time: 20-40 seconds
+                          Estimated time: 20-40 seconds
                       </div>
                    </div>
                 )}
@@ -201,18 +193,18 @@ export default function AudioStudio() {
                 {/* --- CONTROL: SPEED --- */}
                 {tool === "speed" && (
                   <div className="space-y-4">
-                     <div className="flex justify-between text-sm font-bold text-gray-400">
+                      <div className="flex justify-between text-sm font-bold text-gray-400">
                         <span>Slow (0.5x)</span>
                         <span className="text-white text-lg">{value}x</span>
                         <span>Fast (2.0x)</span>
-                     </div>
-                     <input 
-                       type="range" min="0.5" max="2.0" step="0.1" 
-                       value={value} 
-                       onChange={(e) => setValue(e.target.value)}
-                       className="w-full accent-blue-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                     />
-                  </div>
+                      </div>
+                      <input 
+                        type="range" min="0.5" max="2.0" step="0.1" 
+                        value={value} 
+                        onChange={(e) => setValue(e.target.value)}
+                        className="w-full accent-blue-500 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                      />
+                   </div>
                 )}
 
                 {/* --- CONTROL: PITCH --- */}
@@ -232,20 +224,20 @@ export default function AudioStudio() {
                 {/* --- CONTROL: TRIM (DUAL SLIDER) --- */}
                 {tool === "trim" && (
                   <div className="space-y-6">
-                     <div className="flex justify-between text-sm text-gray-300 font-mono">
+                      <div className="flex justify-between text-sm text-gray-300 font-mono">
                         <div>Start: <span className="text-white">{formatTime(trimStart)}</span></div>
                         <div>End: <span className="text-white">{formatTime(trimEnd)}</span></div>
-                     </div>
+                      </div>
 
-                     {/* Visual Timeline Bar */}
-                     <div className="relative h-12 bg-black/40 rounded-lg overflow-hidden border border-white/10 group">
+                      {/* Visual Timeline Bar */}
+                      <div className="relative h-12 bg-black/40 rounded-lg overflow-hidden border border-white/10 group">
                         
                         {/* Selected Region Highlight */}
                         <div 
                            className="absolute top-0 bottom-0 bg-green-500/20 border-l border-r border-green-500/50"
                            style={{
-                              left: `${(trimStart / duration) * 100}%`,
-                              right: `${100 - (trimEnd / duration) * 100}%`
+                             left: `${(trimStart / duration) * 100}%`,
+                             right: `${100 - (trimEnd / duration) * 100}%`
                            }}
                         />
 
@@ -282,9 +274,9 @@ export default function AudioStudio() {
                             className="absolute top-0 bottom-0 w-1 bg-green-400 z-10 pointer-events-none" 
                             style={{ left: `${(trimEnd / duration) * 100}%` }}
                          />
-                     </div>
-                     
-                     <p className="text-xs text-center text-gray-500">Drag from left and right edges to trim</p>
+                      </div>
+                      
+                      <p className="text-xs text-center text-gray-500">Drag from left and right edges to trim</p>
                   </div>
                 )}
 

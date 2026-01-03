@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Sidebar from "../components/Sidebar";
-import { Loader2, Wand2, AlertCircle, Volume2 } from "lucide-react"; // Changed Icon
+import { Loader2, Wand2, AlertCircle, Volume2 } from "lucide-react"; 
 import axios from "axios";
 import AudioWaveform from "../components/AudioWaveform"; 
 
@@ -10,6 +10,9 @@ export default function Dashboard() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // 🟢 NEW: Dynamic API URL (Works on Vercel & Localhost)
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
   const handleGenerate = async () => {
     if (!text) return alert("Please enter text!");
 
@@ -17,13 +20,14 @@ export default function Dashboard() {
     setError(null);
 
     try {
-      // CHANGE: We only send text now. The server will handle the voice.
-      const res = await axios.post("http://localhost:5000/api/synthesize", { text }, {
-        headers: { "Content-Type": "application/json" }, // Sending JSON now, not FormData
+      // 🟢 CHANGED: Use API_URL instead of localhost
+      const res = await axios.post(`${API_URL}/api/synthesize`, { text }, {
+        headers: { "Content-Type": "application/json" },
       });
 
       if (res.data.success) {
-        setAudioUrl(`http://localhost:5000${res.data.downloadUrl}?t=${Date.now()}`);
+        // 🟢 CHANGED: Prepend API_URL to the download link
+        setAudioUrl(`${API_URL}${res.data.downloadUrl}?t=${Date.now()}`);
       }
     } catch (err: any) {
       console.error(err);

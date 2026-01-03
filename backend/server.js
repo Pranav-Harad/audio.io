@@ -10,19 +10,32 @@ const path = require("path");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { OAuth2Client } = require('google-auth-library');
-const ffmpeg = require('fluent-ffmpeg'); // <--- NEW IMPORT
+const ffmpeg = require('fluent-ffmpeg'); 
 
 // --- CONFIGURATION ---
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
+
 const MONGO_URI = process.env.MONGO_URI; 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const JWT_SECRET = process.env.JWT_SECRET;
+
+// 🟢 NEW: Get AI Service URL from Environment (Render) or default to localhost
+const AI_URL = process.env.AI_SERVICE_URL || "http://127.0.0.1:8000";
 
 const app = express();
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 const upload = multer({ dest: "uploads/" });
 
-app.use(cors({ origin: ["http://localhost:5173", "http://127.0.0.1:5173"], credentials: true }));
+// 🟢 NEW: CORS Configuration to allow Vercel Frontend
+app.use(cors({ 
+  origin: [
+    "http://localhost:5173",             // Localhost for testing
+    "http://127.0.0.1:5173",
+    process.env.FRONTEND_URL             // <--- Vercel URL from Render Env Vars
+  ], 
+  credentials: true 
+}));
+
 app.use(express.json());
 app.use("/uploads", express.static("uploads"));
 
@@ -69,7 +82,7 @@ app.post("/api/google-login", async (req, res) => {
   } catch (error) { res.status(401).json({ error: "Google Auth Failed" }); }
 });
 
-// --- 🎵 AUDIO STUDIO ROUTES ---
+// --- AUDIO STUDIO ROUTES ---
 
 // 1. Process Audio (Speed, Pitch, Trim) via FFmpeg
 app.post("/api/process-audio", upload.single("audio"), (req, res) => {
@@ -88,8 +101,6 @@ app.post("/api/process-audio", upload.single("audio"), (req, res) => {
   } 
   else if (operation === "pitch") {
     // value: 0.5 (low) to 1.5 (high). 
-    // This method changes pitch AND speed (chipmunk effect), then we resample.
-    // Ideally use complex filters for pure pitch, but this is standard for web apps.
     command.audioFilters(`asetrate=44100*${value},aresample=44100`);
   }
   else if (operation === "trim") {
@@ -115,7 +126,8 @@ app.post("/api/remove-vocals", upload.single("audio"), async (req, res) => {
     const formData = new FormData();
     formData.append("audio_file", fs.createReadStream(req.file.path));
 
-    const aiRes = await axios.post("http://127.0.0.1:8000/separate-vocals", formData, {
+    // 🟢 CHANGED: Uses Dynamic AI_URL variable
+    const aiRes = await axios.post(`${AI_URL}/separate-vocals`, formData, {
       headers: { ...formData.getHeaders() }
     });
 
@@ -126,7 +138,8 @@ app.post("/api/remove-vocals", upload.single("audio"), async (req, res) => {
   }
 });
 
-app.post("/api/synthesize",async (req, res) => {
+// 3. TTS Route
+app.post("/api/synthesize", upload.single("audio"), async (req, res) => {
   try {
     // 1. Get Text (it might come from req.body.text via JSON or FormData)
     const text = req.body.text;
@@ -138,7 +151,7 @@ app.post("/api/synthesize",async (req, res) => {
     const formData = new FormData();
     formData.append("text", text);
 
-    // 🔴 CHANGE: Check if user uploaded a file. If NOT, use default.
+    // CHANGE: Check if user uploaded a file. If NOT, use default.
     if (req.file) {
       // Case A: User uploaded a file (Voice Cloning future-proofing)
       formData.append("audio_file", fs.createReadStream(req.file.path));
@@ -153,8 +166,8 @@ app.post("/api/synthesize",async (req, res) => {
       formData.append("audio_file", fs.createReadStream(defaultVoicePath));
     }
 
-    // 3. Send to Python Backend
-    const aiResponse = await axios.post("http://127.0.0.1:8000/clone-voice", formData, {
+    // 🟢 CHANGED: Uses Dynamic AI_URL variable
+    const aiResponse = await axios.post(`${AI_URL}/clone-voice`, formData, {
       headers: { ...formData.getHeaders() },
       responseType: 'arraybuffer' 
     });
@@ -167,9 +180,9 @@ app.post("/api/synthesize",async (req, res) => {
     res.json({ success: true, downloadUrl: `/uploads/${outputFilename}` });
 
   } catch (err) {
-    console.error("❌ TTS Error:", err.message);
+    console.error("TTS Error:", err.message);
     res.status(500).json({ error: "TTS Generation Failed" });
   }
 });
 
-app.listen(PORT, "0.0.0.0", () => console.log(`🚀 Node.js Server running on port ${PORT}`));
+app.listen(PORT, "0.0.0.0", () => console.log(`Node.js Server running on port ${PORT}`));
