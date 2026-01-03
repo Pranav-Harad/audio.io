@@ -1,6 +1,12 @@
 fastapi
 uvicorn
 python-multipart
-scipy
-torch
+ffmpeg-python
+spleeter
 TTS
+transformers==4.36.2
+scipy
+numpy
+torch
+torchaudio
+torchvision
