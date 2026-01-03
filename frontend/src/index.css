@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background-color: #050505;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden; /* Prevent horizontal scroll */
+}
+
+/* 🟢 HIDE SCROLLBAR BUT ALLOW SCROLLING */
+::-webkit-scrollbar {
+    display: none;
+}
+body {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+/* 🟢 ANIMATIONS */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s ease-out forwards;
+}
+
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+
+body {
+  margin: 0;
+  background-color: #050505; /* Deepest Black */
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+/* --- SPACE BACKGROUND UTILITIES --- */
+
+/* 1. The Container representing the universe */
+.space-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1; /* Behind all content */
+  background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
+  overflow: hidden;
+}
+
+/* 2. Normal Stars (Static & Twinkling) */
+.star {
+  position: absolute;
+  background: white;
+  border-radius: 50%;
+  opacity: 0.8;
+  animation: drift 100s linear infinite; /* Slow movement */
+}
+
+/* 3. The "Light Travel" Effect (Shooting Stars) */
+.shooting-star {
+  position: absolute;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 50%, rgba(255,255,255,0) 100%);
+  opacity: 0;
+  transform: rotate(-45deg);
+  animation: shoot 5s ease-in-out infinite;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.8); /* Glow effect */
+}
+
+/* --- ANIMATIONS --- */
+
+@keyframes drift {
+  from { transform: translateY(0px); }
+  to { transform: translateY(-1000px); } /* Moves stars UP like you are falling/flying */
+}
+
+@keyframes shoot {
+  0% {
+    transform: translateX(0) translateY(0) rotate(-45deg) scaleX(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  20% {
+    transform: translateX(-200px) translateY(200px) rotate(-45deg) scaleX(2); /* Stretching light */
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(-200px) translateY(200px) rotate(-45deg) scaleX(2);
+    opacity: 0;
+  }
+}
+
+/* --- UI GLASS PANELS (Kept from before) --- */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+.input-glow:focus {
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+  border-color: rgba(59, 130, 246, 0.8);
+}
