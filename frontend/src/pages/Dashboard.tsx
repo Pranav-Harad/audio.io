@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Sidebar from "../components/Sidebar";
-import { Loader2, Wand2, AlertCircle, Volume2 } from "lucide-react"; 
+import { Loader2, AlertCircle, Volume2 } from "lucide-react"; 
 import axios from "axios";
 import AudioWaveform from "../components/AudioWaveform"; 
 
