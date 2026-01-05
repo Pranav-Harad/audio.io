@@ -12,10 +12,11 @@ ENV PATH="/home/user/.local/bin:$PATH"
 WORKDIR /app
 
 # Copy Requirements & Install
+# 3. Install Python Dependencies
 COPY --chown=user requirements.txt requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir -r requirements.txt
+    # Install exactly what is in requirements.txt from the CPU index
+    pip install --no-cache-dir -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
 
 # Copy Code
 COPY --chown=user . .
