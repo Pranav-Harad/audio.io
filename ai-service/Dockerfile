@@ -24,4 +24,7 @@ COPY --chown=user . .
 RUN mkdir -p temp_uploads generated_audio tts_models
 
 EXPOSE 7860
+
+ENV COQUI_TOS_AGREED=1
+
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
