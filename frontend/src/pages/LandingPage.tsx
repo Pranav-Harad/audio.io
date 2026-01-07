@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mic, Music, Scissors, Activity, ArrowRight, Github, Twitter, Layers, Zap, Waves } from "lucide-react";
+import { Mic, Music, Scissors, Activity, ArrowRight, Github, Layers, Zap, Waves } from "lucide-react";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -18,7 +18,7 @@ export default function LandingPage() {
       // 2. If logged in, go DIRECTLY to the page (Studio or Dashboard)
       navigate(destination);
     } else {
-      // 3. If NOT logged in, go to Auth, but remember where we wanted to go
+      
       navigate("/auth", { state: { from: destination } });
     }
   };
@@ -26,7 +26,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen text-white font-sans overflow-x-hidden relative">
       
-      {/* BACKGROUND ACCENT (Optional - adds depth behind content) */}
+      {/* BACKGROUND ACCENT*/}
       <div className="fixed top-0 left-0 w-full h-full pointer-events-none z-[-1]">
           <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px]" />
           <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[120px]" />
@@ -80,7 +80,7 @@ export default function LandingPage() {
 
       </header>
 
-      {/* --- NEW PROFESSIONAL SERVICES SECTION --- */}
+      
       {/* --- NEW PROFESSIONAL SERVICES SECTION --- */}
       <section ref={featuresRef} className="max-w-7xl mx-auto px-6 mb-32 w-full animate-fade-in-up delay-100 scroll-mt-24">
         <div className="text-center mb-16">
@@ -182,8 +182,15 @@ export default function LandingPage() {
             © 2026 Audio.io AI Inc. All rights reserved.
           </div>
           <div className="flex gap-6">
-            <Github className="text-gray-400 hover:text-white cursor-pointer transition-colors" />
-            <Twitter className="text-gray-400 hover:text-white cursor-pointer transition-colors" />
+                {/* Wrap the icon in an 'a' tag */}
+                <a 
+                  href="https://github.com/Pranav-Harad/audio.io" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                    <Github size={24} />
+                </a>
           </div>
         </div>
       </footer>
